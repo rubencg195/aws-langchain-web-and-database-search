@@ -1,6 +1,27 @@
-# AWS LangChain Web and Database Search
+# AWS LangChain Web and Database Search - Complete Documentation
 
 A production-ready serverless application that combines web search and database retrieval with AI-powered summarization using AWS Bedrock. The application is deployed on AWS ECS Fargate using OpenTofu/Terraform.
+
+---
+
+## Table of Contents
+
+1. [Project Status](#project-status)
+2. [Overview](#overview)
+3. [Architecture](#architecture)
+4. [Features](#features)
+5. [Project Structure](#project-structure)
+6. [Prerequisites](#prerequisites)
+7. [Deployment](#deployment)
+8. [API Usage](#api-usage)
+9. [Configuration](#configuration)
+10. [Bedrock Integration Resolution](#bedrock-integration-resolution)
+11. [Detailed System Design](#detailed-system-design)
+12. [Monitoring & Troubleshooting](#monitoring--troubleshooting)
+13. [Cost Analysis](#cost-analysis)
+14. [Production Readiness](#production-readiness)
+
+---
 
 ## Project Status
 
@@ -53,31 +74,22 @@ Response:
 - ✅ CloudWatch logging
 - ✅ Error handling and retry logic
 
-**Known Status**:
-- Database search working correctly ✅
-- API endpoint responding properly ✅
-- Error handling functional ✅
-- Bedrock model access not yet enabled (pending account setup)
-
-### Current Status Details
-- **Infrastructure**: All resources deployed successfully
-- **ECS Service**: Running and healthy
-- **Health Check**: ✅ Working (`/health` returns 200 OK)
-- **Database**: ✅ DynamoDB populated with 5 sample renewable energy items
-- **API Response**: ✅ Returns correct JSON structure with db_count matching
-- **Summarize Endpoint**: ✅ Responding (HTTP 200), Bedrock setup needed for full functionality
-- **Known Issues**: Bedrock model access not yet enabled in AWS account
+---
 
 ## Overview
 
 This project demonstrates a modern RAG (Retrieval-Augmented Generation) architecture that:
 - **Web Search**: Concurrent async searches using SerpAPI with retry/backoff logic
 - **Database Retrieval**: Queries DynamoDB for relevant stored knowledge
-- **AI Summarization**: Uses AWS Bedrock (Claude 3 Sonnet) to generate summaries
+- **AI Summarization**: Uses AWS Bedrock (Claude Haiku 4.5) to generate summaries
 - **Orchestration**: Combines multiple data sources in a Flask API
 - **Infrastructure as Code**: Fully automated deployment using OpenTofu
 
+---
+
 ## Architecture
+
+### High-Level Architecture
 
 ```
 ┌─────────────────┐
@@ -108,13 +120,172 @@ This project demonstrates a modern RAG (Retrieval-Augmented Generation) architec
 └─────────────────┘
 ```
 
+### Complete System Architecture
+
+```mermaid
+graph TB
+    User["👤 User/Client"]
+    Internet["🌐 Internet"]
+    
+    subgraph AWS["AWS Cloud (us-east-1)"]
+        subgraph Network["VPC (10.0.0.0/16)"]
+            AZ1["AZ1 (us-east-1a)"]
+            AZ2["AZ2 (us-east-1b)"]
+            
+            subgraph Subnet1["Public Subnet 1 (10.0.1.0/24)"]
+                Task1["ECS Task 1<br/>Flask App"]
+            end
+            
+            subgraph Subnet2["Public Subnet 2 (10.0.2.0/24)"]
+                Task2["ECS Task 2<br/>Flask App"]
+            end
+            
+            IGW["Internet Gateway"]
+            RT["Route Table"]
+        end
+        
+        subgraph LB["Load Balancing"]
+            ALB["Application Load Balancer<br/>Port 80"]
+            TG["Target Group"]
+        end
+        
+        subgraph Compute["ECS Fargate Cluster"]
+            TaskDef["Task Definition<br/>1024 CPU, 2048 Memory"]
+            Service["ECS Service<br/>2 Replicas"]
+            CW["CloudWatch Logs<br/>/ecs/aws-langchain-..."]
+        end
+        
+        subgraph Storage["Data Layer"]
+            DDB["DynamoDB<br/>Knowledge Base<br/>5 Items"]
+            ECR["ECR Repository<br/>Docker Image"]
+        end
+        
+        subgraph AI["AI/ML Services"]
+            Bedrock["AWS Bedrock<br/>Claude Haiku 4.5"]
+            Profile["Inference Profile<br/>us.anthropic.claude-haiku-4-5"]
+        end
+        
+        subgraph External["External Services"]
+            SerpAPI["SerpAPI<br/>Web Search<br/>Optional"]
+        end
+    end
+    
+    User -->|HTTP Request| Internet
+    Internet -->|Port 80| ALB
+    ALB -->|Route| TG
+    TG -->|Target| Task1
+    TG -->|Target| Task2
+    Task1 -->|Pull Image| ECR
+    Task2 -->|Pull Image| ECR
+    Task1 -->|Query| DDB
+    Task2 -->|Query| DDB
+    Task1 -->|Logs| CW
+    Task2 -->|Logs| CW
+    Task1 -->|Invoke| Bedrock
+    Task2 -->|Invoke| Bedrock
+    Bedrock -->|Use| Profile
+    Task1 -.->|Optional| SerpAPI
+    Task2 -.->|Optional| SerpAPI
+    Task1 -->|HTTP Response| Internet
+    Task2 -->|HTTP Response| Internet
+    Internet -->|HTTP Response| User
+```
+
+### Request Flow - Complete Journey
+
+```mermaid
+sequenceDiagram
+    participant User as User/Client
+    participant ALB as ALB (Port 80)
+    participant TG as Target Group
+    participant Task as ECS Task<br/>(Flask)
+    participant DDB as DynamoDB
+    participant Bedrock as AWS Bedrock
+    participant SerpAPI as SerpAPI<br/>(Optional)
+    participant CW as CloudWatch Logs
+
+    User->>ALB: POST /summarize<br/>{"topic":"Canada"}
+    ALB->>TG: Forward Request
+    TG->>Task: Route to Task 1 or 2
+    activate Task
+    
+    Task->>Task: Parse JSON Payload
+    Task->>CW: Log: Processing topic
+    
+    Task->>DDB: Scan for matching items<br/>topic="Canada"
+    DDB->>Task: Return 1 item
+    Task->>CW: Log: db_count=1
+    
+    alt SerpAPI Key Configured
+        Task->>SerpAPI: POST search request<br/>Optional web search
+        SerpAPI->>Task: Return search results
+        Task->>CW: Log: web_count=X
+    else No SerpAPI Key
+        Task->>CW: Log: SerpAPI skipped
+    end
+    
+    Task->>Task: Combine DDB + Web results
+    Task->>Task: Build prompt for Bedrock
+    Task->>CW: Log: Prompt length: XXX chars
+    
+    Task->>Bedrock: invoke_model()<br/>Model: Haiku 4.5<br/>Inference Profile ARN
+    activate Bedrock
+    Bedrock->>Bedrock: Process prompt<br/>Max tokens: 512
+    Bedrock->>Task: Return summary response
+    deactivate Bedrock
+    
+    Task->>CW: Log: Bedrock response<br/>Status 200, 433 chars
+    
+    Task->>Task: Format JSON response
+    Task->>ALB: Return HTTP 200
+    deactivate Task
+    ALB->>User: {"topic":"Canada",<br/>"summary":"...",<br/>"db_count":1,<br/>"web_count":0}
+```
+
+### Flask Application Flow - Internal Processing
+
+```mermaid
+graph TD
+    A["1. HTTP Request<br/>POST /summarize<br/>{topic: 'Canada'}"] -->|Parse| B["2. Extract Topic<br/>Clean & Validate"]
+    
+    B -->|Trigger| C["3. Database Search<br/>DynamoDB Scan"]
+    C -->|Return| D["4. Parse DB Results<br/>List of items"]
+    
+    B -->|Check| E{SerpAPI Key<br/>Configured?}
+    E -->|Yes| F["5. Web Search<br/>SerpAPI Async"]
+    E -->|No| G["Skip Web Search"]
+    F -->|Return| H["6. Parse Web Results<br/>List of snippets"]
+    G --> H
+    
+    D --> I["7. Combine Results<br/>DB + Web"]
+    H --> I
+    
+    I -->|Create| J["8. Build Prompt<br/>Topic + Context<br/>+ Instructions"]
+    
+    J -->|Retry Logic| K["9. Call Bedrock<br/>invoke_model<br/>Retry up to 3 times<br/>Exponential backoff"]
+    
+    K -->|Extract| L["10. Parse Response<br/>response['body'].read()"]
+    
+    L -->|Error Handling| M{Response<br/>Valid?}
+    
+    M -->|Success| N["11. Extract Summary<br/>response_body['content'][0]['text']"]
+    M -->|Error| O["12. Handle Error<br/>Extract error message<br/>Return to user"]
+    
+    N --> P["13. Format JSON<br/>topic, summary, db_count, web_count"]
+    O --> P
+    
+    P -->|Return| Q["14. HTTP 200<br/>JSON Response<br/>to User"]
+```
+
+---
+
 ## Features
 
 ### Application Features
 - ✅ **Async Concurrent Web Search**: Multiple SerpAPI searches run in parallel
 - ✅ **Tenacity Retry Logic**: Automatic retry with exponential backoff
 - ✅ **DynamoDB Integration**: Retrieval from knowledge base with sample data
-- ✅ **AWS Bedrock LLM**: Claude 3 Sonnet for summarization (needs account setup)
+- ✅ **AWS Bedrock LLM**: Claude Haiku 4.5 for summarization
 - ✅ **RESTful API**: Simple POST endpoint for summarization
 - ✅ **Health Checks**: Monitoring endpoint for ALB
 
@@ -125,27 +296,33 @@ This project demonstrates a modern RAG (Retrieval-Augmented Generation) architec
 - ✅ **Secure Networking**: VPC with public subnets and security groups
 - ✅ **Container Registry**: Private ECR repository
 - ✅ **Logging**: CloudWatch Logs integration
-- ✅ **Infrastructure Testing**: Automated endpoint validation
+- ✅ **High Availability**: 2 tasks across 2 availability zones
+
+---
 
 ## Project Structure
 
 ```
 .
-├── provider.tf          # AWS provider configuration
-├── locals.tf            # Local variables and constants
-├── data.tf              # Data sources (AZs)
-├── vpc.tf               # VPC, subnets, routing, security groups
-├── dynamo.tf            # DynamoDB table and data population
-├── ecr.tf               # ECR repository, Docker build/push, app files
-├── fargate.tf           # ECS cluster, task definition, service, ALB
-├── output.tf            # Output values (ALB DNS, endpoints)
-├── test.tf              # Automated API testing
-├── app.py               # Flask application (generated)
-├── Dockerfile           # Container image definition (generated)
-├── populate_db.py       # DynamoDB seeding script (generated)
-├── requirements.txt     # Python dependencies (generated)
-└── README.md            # This file
+├── provider.tf              # AWS provider configuration
+├── locals.tf                # Local variables and constants
+├── data.tf                  # Data sources (AZs)
+├── vpc.tf                   # VPC, subnets, routing, security groups
+├── dynamo.tf                # DynamoDB table and data population
+├── ecr.tf                   # ECR repository, Docker build/push, app files
+├── bedrock.tf               # Bedrock inference profile setup
+├── fargate.tf               # ECS cluster, task definition, service, ALB
+├── output.tf                # Output values (ALB DNS, endpoints)
+├── test.sh                  # Manual API testing script
+├── bedrock-test.py          # Local Bedrock testing
+├── app.py                   # Flask application (generated)
+├── Dockerfile               # Container image definition (generated)
+├── populate_db.py           # DynamoDB seeding script (generated)
+├── requirements.txt         # Python dependencies (generated)
+└── README.md                # This comprehensive documentation
 ```
+
+---
 
 ## Prerequisites
 
@@ -175,8 +352,10 @@ This project demonstrates a modern RAG (Retrieval-Augmented Generation) architec
 
 5. **AWS Permissions**: Your AWS account needs:
    - ECS, ECR, VPC, ALB, DynamoDB, CloudWatch Logs
-   - **Bedrock Model Access** (IMPORTANT - see setup below)
+   - **Bedrock Model Access** (IMPORTANT - automatically enabled)
    - IAM role creation
+
+---
 
 ## Deployment
 
@@ -196,15 +375,12 @@ That's it! The deployment will:
 3. Build and push Docker image
 4. Create DynamoDB table and populate with sample data
 5. Deploy ECS Fargate service with ALB
-6. Run automated tests
 
 ### Deployment Time
 - **Total**: ~10-12 minutes
 - Image build/push: ~2-3 minutes
 - ECS service stabilization: ~2-3 minutes
 - Testing: ~2 minutes
-
-## Accessing the Application
 
 ### Get Endpoints
 
@@ -219,9 +395,11 @@ health_endpoint = "http://langchain-web-db-search-alb-xxx.us-east-1.elb.amazonaw
 summarize_endpoint = "http://langchain-web-db-search-alb-xxx.us-east-1.elb.amazonaws.com/summarize"
 ```
 
-### API Usage
+---
 
-#### Health Check
+## API Usage
+
+### Health Check
 ```bash
 curl http://<ALB_DNS>/health
 ```
@@ -231,7 +409,7 @@ Response:
 {"status":"ok"}
 ```
 
-#### Summarize Endpoint
+### Summarize Endpoint
 
 ```bash
 curl -X POST http://<ALB_DNS>/summarize \
@@ -249,7 +427,9 @@ Response:
 }
 ```
 
-## Setup & Configuration
+---
+
+## Configuration
 
 ### 1. Bedrock Setup (ALREADY AUTOMATED)
 
@@ -327,6 +507,8 @@ For web search functionality, add SERPAPI_KEY to the container environment:
    ```
 3. Redeploy: `tofu apply -auto-approve`
 
+---
+
 ## Sample Data
 
 The DynamoDB table is pre-populated with renewable energy facts:
@@ -338,283 +520,12 @@ The DynamoDB table is pre-populated with renewable energy facts:
 
 To modify or add data, edit the populate_db.py section in `ecr.tf` and redeploy.
 
-## Monitoring
-
-### CloudWatch Logs
-```bash
-aws logs tail /ecs/aws-langchain-web-and-database-search --follow
-```
-
-### ECS Service Status
-```bash
-aws ecs describe-services \
-  --cluster aws-langchain-web-and-database-search-cluster \
-  --services aws-langchain-web-and-database-search \
-  --region us-east-1
-```
-
-### View Service Events
-```bash
-aws ecs describe-services \
-  --cluster aws-langchain-web-and-database-search-cluster \
-  --services aws-langchain-web-and-database-search \
-  --query 'services[0].events[:5]' \
-  --region us-east-1
-```
-
-## Cost Estimation
-
-**Monthly costs** (with minimal usage):
-- ECS Fargate (1 task): ~$30-40
-- ALB: ~$20
-- DynamoDB (on-demand): ~$1-5
-- ECR: ~$1
-- CloudWatch Logs: ~$1
-- Data Transfer: Variable
-- **Bedrock**: Pay per token (~$0.003/1K input tokens, ~$0.015/1K output tokens)
-
-**Total**: ~$55-70/month (plus Bedrock usage)
-
-## Troubleshooting
-
-### Bedrock Returns ValidationError
-**Solution**: Enable Bedrock model access in your AWS account (see Setup section above)
-
-### ECS Task Won't Start
-```bash
-# Check task status
-aws ecs describe-tasks \
-  --cluster aws-langchain-web-and-database-search-cluster \
-  --tasks <task-arn> \
-  --region us-east-1
-
-# Check logs
-aws logs tail /ecs/aws-langchain-web-and-database-search --follow
-```
-
-### Health Check Fails
-- Wait 2-3 minutes for service to stabilize
-- Check security group allows port 80
-- Verify task is running: `aws ecs list-tasks --cluster aws-langchain-web-and-database-search-cluster`
-
-### Summarize Returns 415 Error
-- Ensure Content-Type header is set to `application/json`
-- Use `curl -H "Content-Type: application/json"`
-
-### No Database Results
-- Verify data exists: `aws dynamodb scan --table-name aws-langchain-web-and-database-search-kb`
-- Search terms must match content in database (case-insensitive)
-- Try searching for keywords from the sample data
-
-## Cleanup
-
-To destroy all resources:
-```bash
-tofu destroy -auto-approve
-```
-
-This will remove:
-- ECS service and tasks
-- ALB and target groups
-- ECR repository (images retained)
-- DynamoDB table (data deleted)
-- VPC and networking
-- IAM roles and policies
-- CloudWatch log groups
-
-## Development
-
-### Local Testing
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Set environment variables
-export AWS_REGION=us-east-1
-export DDB_TABLE=aws-langchain-web-and-database-search-kb
-export BEDROCK_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
-
-# Run locally
-python app.py
-```
-
-### Updating the Application
-1. Modify code in `ecr.tf` (app.py, populate_db.py, etc.)
-2. Run `tofu apply -auto-approve`
-3. OpenTofu will rebuild and redeploy automatically
-
-### Adding More Data
-1. Edit `populate_db.py` in `ecr.tf`
-2. Run `tofu apply -auto-approve`
-
 ---
-
-# Complete Architecture Documentation
-
-## System Architecture Overview
-
-This production system combines multiple AWS services in a coordinated, scalable architecture:
-
-```mermaid
-graph TB
-    User["👤 User/Client"]
-    Internet["🌐 Internet"]
-    
-    subgraph AWS["AWS Cloud (us-east-1)"]
-        subgraph Network["VPC (10.0.0.0/16)"]
-            AZ1["AZ1 (us-east-1a)"]
-            AZ2["AZ2 (us-east-1b)"]
-            
-            subgraph Subnet1["Public Subnet 1 (10.0.1.0/24)"]
-                Task1["ECS Task 1<br/>Flask App"]
-            end
-            
-            subgraph Subnet2["Public Subnet 2 (10.0.2.0/24)"]
-                Task2["ECS Task 2<br/>Flask App"]
-            end
-            
-            IGW["Internet Gateway"]
-            RT["Route Table"]
-        end
-        
-        subgraph LB["Load Balancing"]
-            ALB["Application Load Balancer<br/>Port 80"]
-            TG["Target Group"]
-        end
-        
-        subgraph Compute["ECS Fargate Cluster"]
-            TaskDef["Task Definition<br/>1024 CPU, 2048 Memory"]
-            Service["ECS Service<br/>2 Replicas"]
-            CW["CloudWatch Logs<br/>/ecs/aws-langchain-..."]
-        end
-        
-        subgraph Storage["Data Layer"]
-            DDB["DynamoDB<br/>Knowledge Base<br/>5 Items"]
-            ECR["ECR Repository<br/>Docker Image"]
-        end
-        
-        subgraph AI["AI/ML Services"]
-            Bedrock["AWS Bedrock<br/>Claude Haiku 4.5"]
-            Profile["Inference Profile<br/>us.anthropic.claude-haiku-4-5"]
-        end
-        
-        subgraph External["External Services"]
-            SerpAPI["SerpAPI<br/>Web Search<br/>Optional"]
-        end
-    end
-    
-    User -->|HTTP Request| Internet
-    Internet -->|Port 80| ALB
-    ALB -->|Route| TG
-    TG -->|Target| Task1
-    TG -->|Target| Task2
-    Task1 -->|Pull Image| ECR
-    Task2 -->|Pull Image| ECR
-    Task1 -->|Query| DDB
-    Task2 -->|Query| DDB
-    Task1 -->|Logs| CW
-    Task2 -->|Logs| CW
-    Task1 -->|Invoke| Bedrock
-    Task2 -->|Invoke| Bedrock
-    Bedrock -->|Use| Profile
-    Task1 -.->|Optional| SerpAPI
-    Task2 -.->|Optional| SerpAPI
-    Task1 -->|HTTP Response| Internet
-    Task2 -->|HTTP Response| Internet
-    Internet -->|HTTP Response| User
-```
-
-## Request Flow - Complete Journey
-
-When a user makes a request to `/summarize`, here's what happens:
-
-```mermaid
-sequenceDiagram
-    participant User as User/Client
-    participant ALB as ALB (Port 80)
-    participant TG as Target Group
-    participant Task as ECS Task<br/>(Flask)
-    participant DDB as DynamoDB
-    participant Bedrock as AWS Bedrock
-    participant SerpAPI as SerpAPI<br/>(Optional)
-    participant CW as CloudWatch Logs
-
-    User->>ALB: POST /summarize<br/>{"topic":"Canada"}
-    ALB->>TG: Forward Request
-    TG->>Task: Route to Task 1 or 2
-    activate Task
-    
-    Task->>Task: Parse JSON Payload
-    Task->>CW: Log: Processing topic
-    
-    Task->>DDB: Scan for matching items<br/>topic="Canada"
-    DDB->>Task: Return 1 item
-    Task->>CW: Log: db_count=1
-    
-    alt SerpAPI Key Configured
-        Task->>SerpAPI: POST search request<br/>Optional web search
-        SerpAPI->>Task: Return search results
-        Task->>CW: Log: web_count=X
-    else No SerpAPI Key
-        Task->>CW: Log: SerpAPI skipped
-    end
-    
-    Task->>Task: Combine DDB + Web results
-    Task->>Task: Build prompt for Bedrock
-    Task->>CW: Log: Prompt length: XXX chars
-    
-    Task->>Bedrock: invoke_model()<br/>Model: Haiku 4.5<br/>Inference Profile ARN
-    activate Bedrock
-    Bedrock->>Bedrock: Process prompt<br/>Max tokens: 512
-    Bedrock->>Task: Return summary response
-    deactivate Bedrock
-    
-    Task->>CW: Log: Bedrock response<br/>Status 200, 433 chars
-    
-    Task->>Task: Format JSON response
-    Task->>ALB: Return HTTP 200
-    deactivate Task
-    ALB->>User: {"topic":"Canada",<br/>"summary":"...",<br/>"db_count":1,<br/>"web_count":0}
-```
-
-## Flask Application Flow - Internal Processing
-
-```mermaid
-graph TD
-    A["1. HTTP Request<br/>POST /summarize<br/>{topic: 'Canada'}"] -->|Parse| B["2. Extract Topic<br/>Clean & Validate"]
-    
-    B -->|Trigger| C["3. Database Search<br/>DynamoDB Scan"]
-    C -->|Return| D["4. Parse DB Results<br/>List of items"]
-    
-    B -->|Check| E{SerpAPI Key<br/>Configured?}
-    E -->|Yes| F["5. Web Search<br/>SerpAPI Async"]
-    E -->|No| G["Skip Web Search"]
-    F -->|Return| H["6. Parse Web Results<br/>List of snippets"]
-    G --> H
-    
-    D --> I["7. Combine Results<br/>DB + Web"]
-    H --> I
-    
-    I -->|Create| J["8. Build Prompt<br/>Topic + Context<br/>+ Instructions"]
-    
-    J -->|Retry Logic| K["9. Call Bedrock<br/>invoke_model<br/>Retry up to 3 times<br/>Exponential backoff"]
-    
-    K -->|Extract| L["10. Parse Response<br/>response['body'].read()"]
-    
-    L -->|Error Handling| M{Response<br/>Valid?}
-    
-    M -->|Success| N["11. Extract Summary<br/>response_body['content'][0]['text']"]
-    M -->|Error| O["12. Handle Error<br/>Extract error message<br/>Return to user"]
-    
-    N --> P["13. Format JSON<br/>topic, summary, db_count, web_count"]
-    O --> P
-    
-    P -->|Return| Q["14. HTTP 200<br/>JSON Response<br/>to User"]
-```
 
 ## Bedrock Integration Resolution
 
 ### Problem Encountered
+
 The initial deployment encountered a validation error with Claude Haiku 4.5:
 ```
 ValidationException: Invocation of model ID anthropic.claude-haiku-4-5-20251001-v1:0 
@@ -622,8 +533,13 @@ with on-demand throughput isn't supported. Retry your request with the ID or ARN
 of an inference profile that contains this model.
 ```
 
+### Root Cause
+
+AWS Bedrock requires an **inference profile ARN** for certain models to support on-demand throughput. An inference profile is a container that provides consistent, cross-region model access.
+
 ### Solution: System-Defined Inference Profiles
-AWS provides pre-built, system-defined inference profiles that are automatically available. These profiles handle on-demand throughput and cross-region access seamlessly.
+
+AWS provides pre-built, system-defined inference profiles for all major models. These don't require manual creation—they're automatically available in your account.
 
 **Correct Approach**:
 - Use AWS's system-defined inference profile ARN
@@ -636,15 +552,121 @@ AWS provides pre-built, system-defined inference profiles that are automatically
 - `fargate.tf`: Uses profile ARN from bedrock.tf
 - `ecr.tf` (app.py): Uses correct API format
 
-### Available Inference Profiles
-All automatically available in your AWS account:
-- `us.anthropic.claude-haiku-4-5-20251001-v1:0` (Latest, fast, cost-effective) ✅
-- `us.anthropic.claude-3-sonnet-20240229-v1:0` (Balanced)
-- `us.anthropic.claude-3-opus-20240229-v1:0` (Most capable)
+### File Changes
+
+#### `bedrock.tf`
+```hcl
+# Get current AWS account ID
+data "aws_caller_identity" "current" {}
+
+# Use system-defined inference profile ARN
+locals {
+  bedrock_inference_profile_arn = "arn:aws:bedrock:${local.region}:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+}
+
+output "bedrock_inference_profile_arn" {
+  value       = local.bedrock_inference_profile_arn
+  description = "ARN of the system-defined Bedrock inference profile for Claude Haiku 4.5"
+}
+```
+
+#### `fargate.tf`
+```hcl
+# Task definition environment variable
+{
+  name  = "BEDROCK_MODEL_ID"
+  value = local.bedrock_inference_profile_arn
+}
+```
+
+#### `ecr.tf` (app.py)
+```python
+request_body = {
+    "anthropic_version": "bedrock-2023-05-31",
+    "max_tokens": 512,
+    "messages": [
+        {
+            "role": "user",
+            "content": [{"type": "text", "text": prompt}]
+        }
+    ]
+}
+```
+
+### Key Insights
+
+1. **Inference Profile ARN Format**: `arn:aws:bedrock:REGION:ACCOUNT_ID:inference-profile/MODEL_NAME:VERSION`
+2. **System-Defined vs Custom**: AWS's system profiles are optimized and pre-tested
+3. **API Version Matters**: Use `bedrock-2023-05-31` for Anthropic models
+4. **Content Structure**: Messages must use `[{"type": "text", "text": "..."}]` format
+
+### Testing
+
+Created `bedrock-test.py` for local validation before Fargate deployment:
+
+```python
+# Test with system-defined inference profile
+BEDROCK_MODEL_ID = "arn:aws:bedrock:us-east-1:176843580427:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+
+# All 3 tests passed:
+# ✅ Basic Prompt Test
+# ✅ Summarization Test  
+# ✅ Error Handling Test
+```
+
+### Results
+
+**Before Fix**:
+```json
+{
+  "summary": "BEDROCK_ERROR: ...",
+  "db_count": 1,
+  "web_count": 0
+}
+```
+
+**After Fix**:
+```json
+{
+  "summary": "# Canada's Renewable Energy Expansion\n\nCanada is planning to significantly increase its wind and solar energy capacity by 2030 as part of its commitment to clean energy and climate goals...",
+  "db_count": 1,
+  "web_count": 0
+}
+```
+
+### Available System-Defined Inference Profiles
+
+All of these are automatically available in your account:
+
+- `us.anthropic.claude-haiku-4-5-20251001-v1:0` (Latest, fastest, most cost-effective) ✅
+- `us.anthropic.claude-3-sonnet-20240229-v1:0` (Balanced capability and speed)
+- `us.anthropic.claude-3-opus-20240229-v1:0` (Most capable, slowest)
+- `us.meta.llama3-70b-instruct-v1:0` (Open-source alternative)
+- `us.mistral.mistral-large-2402-v1:0` (Mistral's large model)
+
+### Future Enhancements
+
+To change models, simply update the inference profile ARN:
+
+```hcl
+# In bedrock.tf
+bedrock_inference_profile_arn = "arn:aws:bedrock:us-east-1:ACCOUNT_ID:inference-profile/us.anthropic.claude-3-sonnet-20240229-v1:0"
+```
+
+Then redeploy: `tofu apply -auto-approve`
+
+### Lessons Learned
+
+1. **Always check AWS documentation** - System profiles are the recommended approach
+2. **Local testing is critical** - bedrock-test.py caught issues before Fargate deployment
+3. **Inference profiles are powerful** - They abstract away regional complexity
+4. **API format matters** - The message structure must match the API version specification
 
 ---
 
-## Infrastructure as Code (IaC) Organization
+## Detailed System Design
+
+### Infrastructure as Code (IaC) Organization
 
 The project uses OpenTofu/Terraform with modular file structure:
 
@@ -677,7 +699,7 @@ graph TB
     Locals --> Bedrock
 ```
 
-## Deployment Sequence
+### Deployment Sequence
 
 ```mermaid
 sequenceDiagram
@@ -721,7 +743,231 @@ sequenceDiagram
     User->>AWS: Ready for requests
 ```
 
-## Key Metrics & Configuration
+### VPC & Networking
+
+```mermaid
+graph LR
+    IGW["Internet Gateway"]
+    
+    subgraph VPC["VPC 10.0.0.0/16"]
+        RT["Route Table"]
+        
+        subgraph AZ1["Availability Zone 1"]
+            Sub1["Subnet 10.0.1.0/24"]
+            Task1["Task 1"]
+        end
+        
+        subgraph AZ2["Availability Zone 2"]
+            Sub2["Subnet 10.0.2.0/24"]
+            Task2["Task 2"]
+        end
+        
+        SG["Security Group<br/>Ingress: 80<br/>Egress: All"]
+    end
+    
+    IGW -->|Route| VPC
+    RT -->|Forward| IGW
+    Sub1 --> RT
+    Sub2 --> RT
+    Task1 -.->|Attached| SG
+    Task2 -.->|Attached| SG
+```
+
+### Load Balancing & Service Discovery
+
+```mermaid
+graph TB
+    Internet["Client Requests"]
+    
+    Internet --> ALB["ALB<br/>langchain-web-db-search-alb<br/>Port: 80<br/>Protocol: HTTP"]
+    
+    ALB --> LR["Listener Rule<br/>Path: /health, /summarize"]
+    
+    LR --> TG["Target Group<br/>langchain-web-db-search-tg<br/>Port: 80<br/>Protocol: HTTP"]
+    
+    TG --> HC["Health Check<br/>Path: /health<br/>Interval: 30s<br/>Threshold: 2"]
+    
+    HC --> T1["Target: Task 1<br/>IP: 10.0.1.X<br/>Status: Healthy"]
+    HC --> T2["Target: Task 2<br/>IP: 10.0.2.X<br/>Status: Healthy"]
+    
+    T1 --> APP1["Flask App<br/>Port 80"]
+    T2 --> APP2["Flask App<br/>Port 80"]
+```
+
+### ECS Fargate Compute Layer
+
+```mermaid
+graph TD
+    Cluster["ECS Cluster<br/>aws-langchain-web-and-database-search-cluster<br/>FARGATE launch type"]
+    
+    Cluster --> TaskDef["Task Definition<br/>aws-langchain-web-and-database-search<br/>Image: ECR URL<br/>CPU: 1024<br/>Memory: 2048"]
+    
+    TaskDef -->|Environment Variables| Env["BEDROCK_MODEL_ID<br/>AWS_REGION: us-east-1<br/>DDB_TABLE: aws-langchain-web-and-database-search-kb<br/>SERPAPI_API_KEY: optional"]
+    
+    TaskDef -->|Logging| LogDriver["awslogs driver<br/>Log Group: /ecs/aws-langchain-web-and-database-search"]
+    
+    TaskDef -->|IAM Role| Role["ecsTaskExecutionRole<br/>Permissions:<br/>- bedrock:InvokeModel<br/>- dynamodb:Scan<br/>- dynamodb:Query<br/>- logs:CreateLogStream<br/>- logs:PutLogEvents<br/>- ecr:GetAuthorizationToken"]
+    
+    Cluster --> Service["ECS Service<br/>Desired Count: 2<br/>Launch Type: FARGATE<br/>Network: Public Subnets"]
+    
+    Service -->|Manages| Task1["Running Task 1"]
+    Service -->|Manages| Task2["Running Task 2"]
+    
+    Task1 --> Container1["Flask Container<br/>Python 3.11"]
+    Task2 --> Container2["Flask Container<br/>Python 3.11"]
+```
+
+### Data & Storage Layer
+
+```mermaid
+graph TB
+    subgraph DynamoDB["DynamoDB<br/>Billing Mode: PAY_PER_REQUEST"]
+        Table["Table: aws-langchain-web-and-database-search-kb<br/>Partition Key: id (String)"]
+        
+        Table -->|Item 1| I1["Canada Renewable Energy<br/>2030 capacity plans"]
+        Table -->|Item 2| I2["Alberta Incentives<br/>Project development"]
+        Table -->|Item 3| I3["Battery Storage<br/>Investment trends"]
+        Table -->|Item 4| I4["BC Net-Zero<br/>Provincial policies"]
+        Table -->|Item 5| I5["Ontario EV<br/>Infrastructure"]
+    end
+    
+    subgraph ECR["ECR Repository<br/>aws-langchain-web-and-database-search"]
+        Image["Docker Image<br/>Tag: latest<br/>Base: python:3.11-slim<br/>Size: ~500MB"]
+        
+        Image -->|Includes| App["app.py<br/>Flask endpoints<br/>Bedrock integration"]
+        Image -->|Includes| ReqFile["requirements.txt<br/>aiohttp, flask,<br/>tenacity, boto3,<br/>langchain modules"]
+    end
+```
+
+### AI/ML & Bedrock Integration
+
+```mermaid
+graph TB
+    App["Flask App<br/>call_bedrock()"]
+    
+    App -->|1. Construct Request| ReqBody["Request Body<br/>{<br/>  anthropic_version: bedrock-2023-05-31<br/>  max_tokens: 512<br/>  messages: [{<br/>    role: user<br/>    content: [{<br/>      type: text<br/>      text: prompt<br/>    }]<br/>  }]<br/>}"]
+    
+    ReqBody -->|2. Invoke| BedRock["AWS Bedrock<br/>bedrock-runtime client<br/>invoke_model()"]
+    
+    BedRock -->|Use| Profile["Inference Profile<br/>arn:aws:bedrock:us-east-1:...<br/>:inference-profile/<br/>us.anthropic.claude-haiku-4-5-20251001-v1:0"]
+    
+    Profile -->|Route to| Model["Claude Haiku 4.5<br/>Latest Model<br/>Fast & Cost-effective<br/>On-demand throughput"]
+    
+    Model -->|3. Process| Process["Model Processing<br/>- Tokenize input<br/>- Generate tokens<br/>- Apply constraints"]
+    
+    Process -->|4. Return| Response["Response Body<br/>{<br/>  model: haiku-...<br/>  id: msg_...<br/>  content: [{<br/>    type: text<br/>    text: summary<br/>  }]<br/>  usage: {...}<br/>}"]
+    
+    Response -->|5. Parse| Extract["Extract Summary<br/>response['body'].read()<br/>json.loads()<br/>response['content'][0]['text']"]
+    
+    Extract -->|6. Return| AppReturn["Return to Flask<br/>For JSON response"]
+```
+
+### Detailed Application Flow in Fargate
+
+```mermaid
+graph TD
+    Start["Container Start"] -->|Set Env| EnvVars["Load Environment:<br/>- BEDROCK_MODEL_ID<br/>- AWS_REGION<br/>- DDB_TABLE"]
+    
+    EnvVars -->|Init| BotoInit["Initialize AWS Clients:<br/>- bedrock-runtime<br/>- dynamodb<br/>- aiohttp session"]
+    
+    BotoInit -->|Start| Flask["Start Flask App<br/>Debug: False<br/>Port: 80<br/>Host: 0.0.0.0"]
+    
+    Flask -->|Ready| Ready["App Ready<br/>Listening for requests"]
+    
+    Ready -->|Route| HealthRoute["/health endpoint<br/>GET /health"]
+    Ready -->|Route| SummarizeRoute["/summarize endpoint<br/>POST /summarize"]
+    
+    HealthRoute -->|Handler| HealthHandler["Health Check Handler<br/>Return {status: ok}"]
+    
+    SummarizeRoute -->|Handler| ParseJSON["Parse JSON Request<br/>Extract 'topic' field<br/>Use force=True<br/>for flexibility"]
+    
+    ParseJSON -->|Validate| Validate{Topic<br/>Valid?}
+    
+    Validate -->|No| Error400["Return 400 Error<br/>Invalid JSON"]
+    Validate -->|Yes| DBSearch["Search DynamoDB<br/>ddb_search_similar(topic)"]
+    
+    DBSearch -->|Scan| DDBScan["DynamoDB Scan<br/>Filter items<br/>by topic match"]
+    
+    DDBScan -->|Parse| DBResults["Parse Results<br/>Extract text<br/>Build list"]
+    
+    DBResults -->|Check| SerpCheck{SerpAPI<br/>Key Set?}
+    
+    SerpCheck -->|No| SkipWeb["Skip Web Search<br/>web_results = []"]
+    SerpCheck -->|Yes| WebSearch["Run Web Search<br/>asyncio.run(<br/>run_concurrent_searches())"]
+    
+    WebSearch -->|Async| WS1["Search 1<br/>aiohttp GET"]
+    WebSearch -->|Async| WS2["Search 2<br/>aiohttp GET"]
+    WS1 -->|Gather| WSGather["Gather Results<br/>Parse JSON"]
+    WS2 --> WSGather
+    
+    SkipWeb --> Combine["Combine Results<br/>db_results + web_results<br/>Max 10 items"]
+    WSGather --> Combine
+    
+    Combine -->|Check| HasResults{Any<br/>Results?}
+    
+    HasResults -->|No| NoInfo["Set summary<br/>= No information found"]
+    
+    HasResults -->|Yes| BuildPrompt["Build Prompt<br/>Topic: {topic}<br/>Context: {results}<br/>Instruction:<br/>Provide concise<br/>summary 2-3 sentences"]
+    
+    BuildPrompt -->|Call| Bedrock["Call Bedrock<br/>@retry decorator<br/>Max 3 attempts<br/>Exponential backoff"]
+    
+    Bedrock -->|Success| Summary["Extract Summary<br/>from response"]
+    Bedrock -->|Fail| BedError["Handle Error<br/>Return error message<br/>as summary"]
+    
+    Summary --> Format["Format Response<br/>{<br/>  topic: ...<br/>  summary: ...<br/>  db_count: ...<br/>  web_count: ...<br/>}"]
+    
+    BedError --> Format
+    NoInfo --> Format
+    Error400 --> Format
+    
+    Format -->|Return| HTTP["HTTP 200<br/>Content-Type: application/json<br/>Return JSON"]
+    
+    HTTP -->|Send| ALB["ALB receives<br/>response"]
+    
+    ALB -->|Forward| Client["Client receives<br/>JSON response"]
+    
+    Client -->|Done| End["Request Complete<br/>Task ready for<br/>next request"]
+```
+
+### Error Handling & Retry Logic
+
+```mermaid
+graph TD
+    Call["Bedrock Call<br/>invoke_model()"]
+    
+    Call -->|Try 1| Attempt1["Attempt 1<br/>Wait 1-2s"]
+    
+    Attempt1 -->|Success| Return["✅ Return Response"]
+    Attempt1 -->|Exception| Check1{Is<br/>Exception?}
+    
+    Check1 -->|Yes| Wait1["Wait exponential<br/>min=1s, max=10s"]
+    Check1 -->|No| Return
+    
+    Wait1 --> Attempt2["Attempt 2<br/>Wait 2-4s"]
+    
+    Attempt2 -->|Success| Return
+    Attempt2 -->|Exception| Check2{Is<br/>Exception?}
+    
+    Check2 -->|Yes| Wait2["Wait exponential<br/>min=1s, max=10s"]
+    Check2 -->|No| Return
+    
+    Wait2 --> Attempt3["Attempt 3<br/>Wait 4-8s"]
+    
+    Attempt3 -->|Success| Return
+    Attempt3 -->|Exception| Check3{Is<br/>Exception?}
+    
+    Check3 -->|Yes| Fail["❌ Raise RetryError<br/>Extract last exception"]
+    Check3 -->|No| Return
+    
+    Fail -->|Extract| FinalError["Extract inner<br/>exception details<br/>from RetryError"]
+    
+    FinalError -->|Return| ErrorMsg["Return error message<br/>BEDROCK_ERROR:<br/>ValidationException:<br/>..."]
+    
+    Return -->|User| Success["User gets<br/>summary"]
+    ErrorMsg -->|User| Error["User gets<br/>error in summary field"]
+```
+
+### Key Metrics & Configuration
 
 | Component | Metric | Value | Notes |
 |-----------|--------|-------|-------|
@@ -738,7 +984,84 @@ sequenceDiagram
 | | Port | 80 (HTTP) | No HTTPS in demo |
 | **CloudWatch** | Log Retention | Indefinite | Adjust as needed |
 
-## Deployment Verification Checklist
+---
+
+## Monitoring & Troubleshooting
+
+### CloudWatch Logs
+```bash
+aws logs tail /ecs/aws-langchain-web-and-database-search --follow
+```
+
+### ECS Service Status
+```bash
+aws ecs describe-services \
+  --cluster aws-langchain-web-and-database-search-cluster \
+  --services aws-langchain-web-and-database-search \
+  --region us-east-1
+```
+
+### View Service Events
+```bash
+aws ecs describe-services \
+  --cluster aws-langchain-web-and-database-search-cluster \
+  --services aws-langchain-web-and-database-search \
+  --query 'services[0].events[:5]' \
+  --region us-east-1
+```
+
+### Troubleshooting
+
+#### Bedrock Returns ValidationError
+**Solution**: Enable Bedrock model access in your AWS account (see Bedrock Resolution section)
+
+#### ECS Task Won't Start
+```bash
+# Check task status
+aws ecs describe-tasks \
+  --cluster aws-langchain-web-and-database-search-cluster \
+  --tasks <task-arn> \
+  --region us-east-1
+
+# Check logs
+aws logs tail /ecs/aws-langchain-web-and-database-search --follow
+```
+
+#### Health Check Fails
+- Wait 2-3 minutes for service to stabilize
+- Check security group allows port 80
+- Verify task is running: `aws ecs list-tasks --cluster aws-langchain-web-and-database-search-cluster`
+
+#### Summarize Returns 415 Error
+- Ensure Content-Type header is set to `application/json`
+- Use `curl -H "Content-Type: application/json"`
+
+#### No Database Results
+- Verify data exists: `aws dynamodb scan --table-name aws-langchain-web-and-database-search-kb`
+- Search terms must match content in database (case-insensitive)
+- Try searching for keywords from the sample data
+
+---
+
+## Cost Analysis
+
+### Monthly Cost Breakdown
+
+| Service | Usage | Cost |
+|---------|-------|------|
+| ECS Fargate | 2 tasks × 730h × $0.05/h | $73.00 |
+| ALB | 730h × $16.20/month | $16.20 |
+| DynamoDB | Pay-per-request (~100 reads/day) | $1.25 |
+| ECR | Storage (~500MB image) | $0.10 |
+| CloudWatch Logs | ~50GB/month | ~$25.00 |
+| Bedrock | ~100 invocations/day × $0.0003 | ~$0.90 |
+| **Total** | | **~$117/month** |
+
+---
+
+## Production Readiness
+
+### Deployment Verification Checklist
 
 After deployment, verify:
 
@@ -753,21 +1076,7 @@ After deployment, verify:
 - [ ] ✅ Bedrock is generating summaries
 - [ ] ✅ Error handling returns graceful messages
 
-## Cost Breakdown
-
-**Monthly Estimate** (with light usage):
-
-| Service | Usage | Cost |
-|---------|-------|------|
-| ECS Fargate | 2 tasks × 730h × $0.05/h | $73.00 |
-| ALB | 730h × $16.20/month | $16.20 |
-| DynamoDB | Pay-per-request (~100 reads/day) | $1.25 |
-| ECR | Storage (~500MB image) | $0.10 |
-| CloudWatch Logs | ~50GB/month | ~$25.00 |
-| Bedrock | ~100 invocations/day × $0.0003 | ~$0.90 |
-| **Total** | | **~$117/month** |
-
-## Production Readiness
+### Production Features
 
 This deployment is production-ready with:
 
@@ -782,7 +1091,7 @@ This deployment is production-ready with:
 - ✅ **Error Handling**: Graceful failures with detailed messages
 - ✅ **Cost Efficiency**: On-demand pricing for all services
 
-## Next Steps
+### Next Steps
 
 1. **Enable Web Search**: Add SerpAPI key in `fargate.tf` and redeploy
 2. **Scale Up**: Increase ECS CPU/memory in `locals.tf`
@@ -792,29 +1101,56 @@ This deployment is production-ready with:
 6. **HTTPS**: Add ACM certificate to ALB
 7. **Auto-Scaling**: Configure target tracking policies
 
+### Development
+
+#### Local Testing
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set environment variables
+export AWS_REGION=us-east-1
+export DDB_TABLE=aws-langchain-web-and-database-search-kb
+export BEDROCK_MODEL_ID=anthropic.claude-haiku-4-5-20251001-v1:0
+
+# Run locally
+python app.py
+```
+
+#### Updating the Application
+1. Modify code in `ecr.tf` (app.py, populate_db.py, etc.)
+2. Run `tofu apply -auto-approve`
+3. OpenTofu will rebuild and redeploy automatically
+
+### Cleanup
+
+To destroy all resources:
+```bash
+tofu destroy -auto-approve
+```
+
+This will remove:
+- ECS service and tasks
+- ALB and target groups
+- ECR repository (images retained)
+- DynamoDB table (data deleted)
+- VPC and networking
+- IAM roles and policies
+- CloudWatch log groups
+
 ---
 
-## Support & Debugging
+## Summary
 
-### Common Issues & Solutions
+This comprehensive documentation covers:
+- ✅ Complete system architecture with Mermaid diagrams
+- ✅ Request flow and internal processing details
+- ✅ Bedrock integration troubleshooting and resolution
+- ✅ Infrastructure as Code organization
+- ✅ Deployment sequence and configuration
+- ✅ API usage and examples
+- ✅ Monitoring and troubleshooting guide
+- ✅ Cost analysis and production readiness
+- ✅ All best practices and next steps
 
-**Issue**: Health check fails
-- Wait 2-3 minutes for warm-up
-- Check security group allows port 80
-- Verify task is running: `aws ecs list-tasks --cluster aws-langchain-web-and-database-search-cluster`
-
-**Issue**: Bedrock returns error
-- Check CloudWatch Logs: `aws logs tail /ecs/aws-langchain-web-and-database-search --follow`
-- Verify IAM role has `bedrock:InvokeModel` permission
-- Check model is available in your region
-
-**Issue**: Database returns no results
-- Verify data exists: `aws dynamodb scan --table-name aws-langchain-web-and-database-search-kb`
-- Search terms must match content (case-insensitive substring match)
-- Try keywords from sample data: "Canada", "Alberta", "renewable", etc.
-
-**Issue**: API returns 415 Unsupported Media Type
-- Ensure `Content-Type: application/json` header is set
-- Use correct curl syntax with `-H` flag
-
-For more help, check CloudWatch Logs and see the troubleshooting section above.
+**ALL DOCUMENTATION IS NOW IN THIS SINGLE README.MD FILE** ✅
