@@ -12,7 +12,7 @@ from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_excep
 
 # Configuration
 AWS_REGION = "us-east-1"
-BEDROCK_MODEL_ID = "arn:aws:bedrock:us-east-1:176843580427:application-inference-profile/4ok0qdr5zqg8"  # Inference profile ARN for Haiku 4.5
+BEDROCK_MODEL_ID = "arn:aws:bedrock:us-east-1:176843580427:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"  # System-defined inference profile ARN
 
 # Initialize Bedrock client
 bedrock_client = boto3.client('bedrock-runtime', region_name=AWS_REGION)
