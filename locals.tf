@@ -18,8 +18,8 @@ locals {
   ecs_cpu    = "1024"
   ecs_memory = "2048"
   
-  # Bedrock model
-  bedrock_model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+  # Bedrock model - using inference profile for on-demand throughput
+  bedrock_model_id = "arn:aws:bedrock:us-east-1:176843580427:application-inference-profile/4ok0qdr5zqg8"
   
   # CloudWatch
   log_retention_days = 7

@@ -25,6 +25,7 @@ from flask import Flask, request, jsonify
 import aiohttp
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 import boto3
+import datetime
 
 # langchain imports
 try:
@@ -96,44 +97,60 @@ def ddb_search_similar(topic: str) -> List[str]:
 @retry(wait=wait_exponential(min=1, max=10), stop=stop_after_attempt(3), retry=retry_if_exception_type(Exception))
 def call_bedrock(prompt: str) -> str:
     try:
-        print(f'Calling Bedrock with model: {BEDROCK_MODEL}')
-        print(f'Prompt: {prompt[:100]}...')
+        print(f'\n>>> BEDROCK CALL START')
+        print(f'>>> Model ID: {BEDROCK_MODEL}')
+        print(f'>>> Region: {AWS_REGION}')
+        print(f'>>> Prompt length: {len(prompt)} chars')
         
-        # Use boto3 bedrock-runtime client with cross-model compatible format
+        request_body = {
+            "anthropic_version": "bedrock-2024-04-04",
+            "max_tokens": 512,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+        print(f'>>> Request body keys: {list(request_body.keys())}')
+        
         response = bedrock_client.invoke_model(
             modelId=BEDROCK_MODEL,
             contentType='application/json',
             accept='application/json',
-            body=json.dumps({
-                "anthropic_version": "bedrock-2023-06-01",
-                "max_tokens": 512,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
-            })
+            body=json.dumps(request_body)
         )
         
-        print(f'Response received, parsing body...')
-        response_body = json.loads(response['body'].read())
-        print(f'Response body type: {type(response_body)}, keys: {response_body.keys() if isinstance(response_body, dict) else "not dict"}')
+        print(f'>>> Response received, status code: {response.get("ResponseMetadata", {}).get("HTTPStatusCode", "unknown")}')
         
-        # Extract text from response
+        response_body = json.loads(response['body'].read())
+        print(f'>>> Response body keys: {list(response_body.keys())}')
+        print(f'>>> Full response body: {str(response_body)[:500]}')
+        
         if 'content' in response_body:
             result = response_body['content'][0].get('text', 'No text in response')
+            print(f'>>> SUCCESS: Got {len(result)} chars from Bedrock')
+            return result
         else:
-            result = str(response_body)
-        
-        print(f'Bedrock response received: {result[:100]}...')
-        return result
+            print(f'>>> ERROR: No content key in response')
+            return str(response_body)
+            
     except Exception as e:
-        print(f'Bedrock error: {type(e).__name__}: {str(e)[:300]}')
-        import traceback
-        tb_str = traceback.format_exc()
-        print(f'Traceback: {tb_str[:500]}')
-        raise
+        error_msg = str(e)
+        print(f'Exception type: {type(e).__name__}, message: {error_msg}')
+        
+        # Try to extract the real error from RetryError 
+        try:
+            if hasattr(e, 'last_attempt'):
+                attempt = e.last_attempt
+                print(f'Last attempt: {attempt}')
+                if hasattr(attempt, 'exception'):
+                    exc_method = attempt.exception
+                    # Call it if it's callable (Future.exception())
+                    if callable(exc_method):
+                        inner_exc = exc_method()
+                        error_msg = f'{type(inner_exc).__name__}: {str(inner_exc)}'
+                        print(f'Extracted inner error: {error_msg}')
+        except Exception as extract_err:
+            print(f'Failed to extract inner error: {extract_err}')
+        
+        # Return error message instead of raising
+        return f'BEDROCK_ERROR: {error_msg}'
 
 # ------------------ Orchestrator ------------------
 @app.route('/health')
@@ -174,29 +191,31 @@ def summarize():
     all_results = db_results + web_results
     print(f'Total results to summarize: {len(all_results)}')
     
-    if not all_results:
-        summary = 'No information found for this topic.'
-    else:
-        context = '\n'.join(all_results[:10])  # Use top 10 results
+    summary = 'No information found'  # Default
+    
+    if all_results:
+        context = '\n'.join(all_results[:10])
         prompt = f'Topic: {topic}\n\nContext:\n{context}\n\nProvide a concise summary (2-3 sentences).'
         
         try:
             print(f'Calling Bedrock for summarization...')
             summary = call_bedrock(prompt)
-            print(f'Summarization completed successfully')
+            if summary is None:
+                summary = 'Bedrock returned None'
+            print(f'Summary result: {str(summary)[:100]}')
         except Exception as e:
-            print(f'Summarization error: {type(e).__name__}: {str(e)[:200]}')
-            # Try to extract the actual error from RetryError wrapper
-            import traceback
-            tb = traceback.format_exc()
-            print(f'Full traceback:\n{tb}')
-            summary = f'Summary generation failed: {type(e).__name__}: {str(e)[:100]}'
+            summary = f'ERROR: {type(e).__name__}: {str(e)}'
+            print(f'Summarization failed: {summary}')
+    
+    # Ensure summary is always a string
+    if not summary:
+        summary = 'No summary generated'
     
     return jsonify({
         'topic': topic,
         'db_count': len(db_results),
         'web_count': len(web_results),
-        'summary': summary
+        'summary': str(summary)
     })
 
 if __name__ == '__main__':
