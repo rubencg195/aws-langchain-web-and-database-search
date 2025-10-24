@@ -4,22 +4,24 @@ A production-ready serverless application that combines web search and database 
 
 ## Project Status
 
-✅ **FULLY DEPLOYED AND OPERATIONAL** 
+✅ **FULLY DEPLOYED AND OPERATIONAL WITH BEDROCK SUMMARIZATION WORKING**
 
 ### Latest Updates (October 24, 2025)
 
-**Infrastructure**: All resources deployed successfully
+**Infrastructure**: All resources deployed successfully via OpenTofu
 - VPC with 2 public subnets ✅
 - Application Load Balancer ✅
 - ECS Fargate cluster with running Flask task ✅
 - ECR repository with Docker image built and pushed ✅
 - DynamoDB table with 5 sample items populated ✅
 - CloudWatch Logs integration ✅
+- Bedrock Inference Profile (system-defined Claude Haiku 4.5) ✅
 
 **API Status**:
 - Health Check (`/health`): ✅ Working - Returns `{"status":"ok"}`
 - Summarize Endpoint (`/summarize`): ✅ Working - HTTP 200 with JSON response
 - Database Search: ✅ Verified - Successfully retrieves matching items
+- **Bedrock Summarization**: ✅ **WORKING** - Claude Haiku 4.5 generating summaries
 - Error Handling: ✅ Graceful error messages with proper status codes
 
 **Testing Results**:
@@ -28,7 +30,7 @@ A production-ready serverless application that combines web search and database 
 curl http://langchain-web-db-search-alb-1600321510.us-east-1.elb.amazonaws.com/health
 Response: {"status":"ok"}
 
-# Test 2: Database Search ✅  
+# Test 2: Bedrock Summarization with Database Context ✅  
 curl -X POST http://langchain-web-db-search-alb-1600321510.us-east-1.elb.amazonaws.com/summarize \
   -H "Content-Type: application/json" \
   -d '{"topic":"Canada"}'
@@ -36,11 +38,20 @@ curl -X POST http://langchain-web-db-search-alb-1600321510.us-east-1.elb.amazona
 Response:
 {
   "db_count": 1,
-  "summary": "Error calling Bedrock: RetryError[...]",
+  "summary": "# Canada's Renewable Energy Expansion\n\nCanada is planning to significantly increase its wind and solar energy capacity by 2030 as part of its commitment to clean energy and climate goals. This expansion aims to reduce reliance on fossil fuels and support the country's transition toward net-zero emissions...",
   "topic": "Canada",
   "web_count": 0
 }
 ```
+
+**Working Components**:
+- ✅ Infrastructure fully managed by OpenTofu
+- ✅ Docker containerization and ECR integration
+- ✅ Database search functionality
+- ✅ Bedrock Claude Haiku 4.5 integration
+- ✅ API endpoints responding correctly
+- ✅ CloudWatch logging
+- ✅ Error handling and retry logic
 
 **Known Status**:
 - Database search working correctly ✅
@@ -240,27 +251,33 @@ Response:
 
 ## Setup & Configuration
 
-### 1. Enable AWS Bedrock Model Access (REQUIRED FOR SUMMARIZATION)
+### 1. Bedrock Setup (ALREADY AUTOMATED)
 
-This is the most important step for full functionality:
+**Good news**: Bedrock model access is now automatically enabled by AWS for all accounts!
 
-1. Go to [AWS Bedrock Console](https://console.aws.amazon.com/bedrock/home)
-2. Click "Model access" in the left sidebar
-3. Search for "Claude 3 Sonnet"
-4. Click "Manage model access"
-5. Check the box next to "Anthropic Claude 3 Sonnet"
-6. Click "Save changes"
-7. Wait 2-3 minutes for access to be granted
+✅ **System-Defined Inference Profiles**: AWS provides pre-built inference profiles for optimal cross-region support
+✅ **Claude Haiku 4.5 (Latest Model)**: `us.anthropic.claude-haiku-4-5-20251001-v1:0` 
+✅ **No Manual Enablement Needed**: All foundation models support on-demand throughput by default
 
-**Without this step, you'll get:**
-```json
-{
-  "topic": "your topic",
-  "summary": "Summary generation failed: ValidationError...",
-  "web_count": 0,
-  "db_count": 0
+**What's Configured**:
+- Model: `anthropic.claude-haiku-4-5-20251001-v1:0` (latest, most cost-effective)
+- Inference Profile: System-defined for us-east-1 region
+- API Version: `bedrock-2023-05-31` with proper message format
+- Auto-retry with exponential backoff (3 attempts, max 10s wait)
+
+**If You Want to Change the Model**:
+
+Edit `bedrock.tf` to use a different inference profile ARN, or edit `locals.tf` for model configuration:
+```hcl
+locals {
+  bedrock_model_id = "arn:aws:bedrock:us-east-1:ACCOUNT_ID:inference-profile/us.anthropic.claude-3-sonnet-20240229-v1:0"
 }
 ```
+
+Available inference profiles (system-defined):
+- `us.anthropic.claude-haiku-4-5-20251001-v1:0` (default - fast, cost-effective) ✅
+- `us.anthropic.claude-3-sonnet-20240229-v1:0` (balanced)
+- `us.anthropic.claude-3-opus-20240229-v1:0` (most capable)
 
 ### 2. AWS Region
 Edit `locals.tf`:
@@ -270,18 +287,22 @@ locals {
 }
 ```
 
-### 3. Bedrock Model
-Edit `locals.tf`:
+### 3. Bedrock Model Configuration
+
+The model is managed through the Bedrock inference profile. The correct setup is already in place in `bedrock.tf`:
+
 ```hcl
+# bedrock.tf - Already configured for system-defined Haiku 4.5
 locals {
-  bedrock_model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
+  bedrock_inference_profile_arn = "arn:aws:bedrock:${local.region}:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"
 }
 ```
 
-Available models:
-- `anthropic.claude-3-sonnet-20240229-v1:0` (default, balanced)
-- `anthropic.claude-3-haiku-20240307-v1:0` (faster, cheaper)
-- `anthropic.claude-3-opus-20240229-v1:0` (more capable)
+This references AWS's system-defined inference profile which:
+- ✅ Supports on-demand throughput
+- ✅ Works across us-east-1, us-east-2, us-west-2
+- ✅ Automatically scales based on usage
+- ✅ No provisioning or configuration needed
 
 ### 4. ECS Resources
 Edit `locals.tf`:
