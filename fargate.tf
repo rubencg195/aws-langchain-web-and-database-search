@@ -157,7 +157,7 @@ resource "aws_ecs_task_definition" "task" {
         },
         {
           name  = "BEDROCK_MODEL_ID"
-          value = aws_bedrockruntime_inference_profile.haiku_profile.arn
+          value = local.bedrock_inference_profile_arn
         }
       ]
       logConfiguration = {
