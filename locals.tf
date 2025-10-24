@@ -18,8 +18,8 @@ locals {
   ecs_cpu    = "1024"
   ecs_memory = "2048"
   
-  # Bedrock model - using inference profile for on-demand throughput
-  bedrock_model_id = "arn:aws:bedrock:us-east-1:176843580427:application-inference-profile/4ok0qdr5zqg8"
+  # Bedrock model - will be populated by the inference profile created in bedrock.tf
+  bedrock_model_id = "arn:aws:bedrock:us-east-1:176843580427:application-inference-profile/4ok0qdr5zqg8"  # Will be replaced by Terraform output
   
   # CloudWatch
   log_retention_days = 7
