@@ -84,6 +84,36 @@ Retry your request with the ID or ARN of an inference profile that contains this
 - Improved error messages show `RetryError` details
 - Bedrock response body type now logged
 
+### Bedrock Model Access (Required for Summarization)
+
+The API currently returns a specific error from Bedrock:
+```
+ValidationException: Invocation of model ID anthropic.claude-haiku-4-5-20251001-v1:0 
+with on-demand throughput isn't supported. Retry your request with the ID or ARN 
+of an inference profile that contains this model.
+```
+
+**This means**: The Claude Haiku 4.5 model requires a cross-region inference profile for on-demand access in us-east-1.
+
+**Solutions** (choose one):
+
+1. **Use Inference Profile (Recommended)**:
+   - Go to AWS Bedrock Console
+   - Create a cross-region inference profile that includes the Haiku model
+   - Update `bedrock_model_id` in `locals.tf` to use the profile ARN
+
+2. **Switch to Claude 3 Sonnet (Alternative)**:
+   - Edit `locals.tf`:
+   ```hcl
+   bedrock_model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
+   ```
+   - Run `tofu apply -auto-approve`
+   - Claude 3 Sonnet supports standard on-demand throughput
+
+3. **Use Provisioned Throughput (Advanced)**:
+   - Request provisioned throughput for Haiku 4.5
+   - Update the request configuration in `app.py`
+
 ---
 
 ## 📋 Project Architecture
