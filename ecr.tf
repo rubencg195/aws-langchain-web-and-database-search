@@ -40,9 +40,12 @@ app = Flask(__name__)
 SERPAPI_KEY = os.getenv('SERPAPI_API_KEY', '')
 AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
 DDB_TABLE = os.getenv('DDB_TABLE', '')
-BEDROCK_MODEL = os.getenv('BEDROCK_MODEL_ID', 'anthropic.claude-3-sonnet-20240229-v1:0')
+BEDROCK_MODEL = os.getenv('BEDROCK_MODEL_ID', 'anthropic.claude-haiku-4-5-20251001-v1:0')
 
 session = None
+
+# Bedrock client for direct API calls
+bedrock_client = boto3.client('bedrock-runtime', region_name=AWS_REGION)
 
 # ------------------ async web search (concurrent) ------------------
 async def serpapi_search_single(session: aiohttp.ClientSession, query: str, start: int = 0):
@@ -75,12 +78,15 @@ db = boto3.resource('dynamodb', region_name=AWS_REGION)
 
 def ddb_search_similar(topic: str) -> List[str]:
     if not DDB_TABLE:
+        print(f'DDB_TABLE is empty or not set')
         return []
     table = db.Table(DDB_TABLE)
     try:
         resp = table.scan()
         items = resp.get('Items', [])
+        print(f'DynamoDB scan found {len(items)} items for topic: {topic}')
         out = [it['content'] for it in items if 'content' in it and topic.lower() in it['content'].lower()]
+        print(f'Matched {len(out)} items for topic "{topic}"')
         return out
     except Exception as e:
         print(f'DynamoDB error: {e}')
@@ -89,18 +95,44 @@ def ddb_search_similar(topic: str) -> List[str]:
 # ------------------ Bedrock summarize with retry/backoff ------------------
 @retry(wait=wait_exponential(min=1, max=10), stop=stop_after_attempt(3), retry=retry_if_exception_type(Exception))
 def call_bedrock(prompt: str) -> str:
-    if BedrockLLM is None:
-        return 'BEDROCK SDK not installed. Prompt excerpt:\n' + prompt[:500]
-    
     try:
-        llm = BedrockLLM(
-            model_id=BEDROCK_MODEL,
-            region_name=AWS_REGION
+        print(f'Calling Bedrock with model: {BEDROCK_MODEL}')
+        print(f'Prompt: {prompt[:100]}...')
+        
+        # Use boto3 bedrock-runtime client with cross-model compatible format
+        response = bedrock_client.invoke_model(
+            modelId=BEDROCK_MODEL,
+            contentType='application/json',
+            accept='application/json',
+            body=json.dumps({
+                "anthropic_version": "bedrock-2023-06-01",
+                "max_tokens": 512,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            })
         )
-        response = llm.invoke(prompt)
-        return str(response)
+        
+        print(f'Response received, parsing body...')
+        response_body = json.loads(response['body'].read())
+        print(f'Response body type: {type(response_body)}, keys: {response_body.keys() if isinstance(response_body, dict) else "not dict"}')
+        
+        # Extract text from response
+        if 'content' in response_body:
+            result = response_body['content'][0].get('text', 'No text in response')
+        else:
+            result = str(response_body)
+        
+        print(f'Bedrock response received: {result[:100]}...')
+        return result
     except Exception as e:
-        print(f'Bedrock error: {e}')
+        print(f'Bedrock error: {type(e).__name__}: {str(e)[:300]}')
+        import traceback
+        tb_str = traceback.format_exc()
+        print(f'Traceback: {tb_str[:500]}')
         raise
 
 # ------------------ Orchestrator ------------------
@@ -120,37 +152,51 @@ def summarize():
     if not topic:
         return jsonify({'error': 'topic required'}), 400
 
-    # run async web searches
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        web_snippets = loop.run_until_complete(run_concurrent_searches(topic, pages=2))
-    except Exception as e:
-        print(f'Web search error: {e}')
-        web_snippets = []
-
-    # db retrieval
-    db_snippets = ddb_search_similar(topic)
-
-    # combine and summarize
-    combined = '\n\n'.join([f'Web: {s}' for s in web_snippets[:20]] + [f'DB: {s}' for s in db_snippets[:20]])
-    if not combined.strip():
-        combined = f'Topic: {topic}'
+    print(f'\n--- Processing topic: {topic} ---')
     
-    prompt = f"""You are an expert summarizer. Summarize key points and action items about '{topic}'. Use the following sources:
-{combined}"""
-
-    try:
-        summary = call_bedrock(prompt)
-    except Exception as e:
-        summary = f'Summary generation failed: {str(e)[:200]}'
-        print(f'Bedrock call failed: {e}')
-
+    # Search database for matching items
+    db_results = ddb_search_similar(topic)
+    print(f'Database results: {len(db_results)} matches')
+    
+    # Search web for relevant content (if SerpAPI key is available)
+    web_results = []
+    if SERPAPI_KEY:
+        print(f'Starting web search...')
+        try:
+            web_results = asyncio.run(run_concurrent_searches(topic, pages=2))
+            print(f'Web results: {len(web_results)} snippets found')
+        except Exception as e:
+            print(f'Web search error: {e}')
+    else:
+        print('SerpAPI key not configured, skipping web search')
+    
+    # Combine results
+    all_results = db_results + web_results
+    print(f'Total results to summarize: {len(all_results)}')
+    
+    if not all_results:
+        summary = 'No information found for this topic.'
+    else:
+        context = '\n'.join(all_results[:10])  # Use top 10 results
+        prompt = f'Topic: {topic}\n\nContext:\n{context}\n\nProvide a concise summary (2-3 sentences).'
+        
+        try:
+            print(f'Calling Bedrock for summarization...')
+            summary = call_bedrock(prompt)
+            print(f'Summarization completed successfully')
+        except Exception as e:
+            print(f'Summarization error: {type(e).__name__}: {str(e)[:200]}')
+            # Try to extract the actual error from RetryError wrapper
+            import traceback
+            tb = traceback.format_exc()
+            print(f'Full traceback:\n{tb}')
+            summary = f'Summary generation failed: {type(e).__name__}: {str(e)[:100]}'
+    
     return jsonify({
-        'topic': topic, 
-        'summary': summary, 
-        'web_count': len(web_snippets), 
-        'db_count': len(db_snippets)
+        'topic': topic,
+        'db_count': len(db_results),
+        'web_count': len(web_results),
+        'summary': summary
     })
 
 if __name__ == '__main__':

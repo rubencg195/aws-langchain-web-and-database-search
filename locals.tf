@@ -19,7 +19,7 @@ locals {
   ecs_memory = "2048"
   
   # Bedrock model
-  bedrock_model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
+  bedrock_model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
   
   # CloudWatch
   log_retention_days = 7
