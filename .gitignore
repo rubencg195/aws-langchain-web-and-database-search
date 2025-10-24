@@ -1,0 +1,23 @@
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+.terraform.lock.hcl
+*.tfvars
+!.gitkeep
+
+# Generated files
+app.py
+Dockerfile
+populate_db.py
+requirements.txt
+
+# IDE
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
