@@ -103,9 +103,14 @@ def call_bedrock(prompt: str) -> str:
         print(f'>>> Prompt length: {len(prompt)} chars')
         
         request_body = {
-            "anthropic_version": "bedrock-2024-04-04",
+            "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 512,
-            "messages": [{"role": "user", "content": prompt}]
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": prompt}]
+                }
+            ]
         }
         print(f'>>> Request body keys: {list(request_body.keys())}')
         
