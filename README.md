@@ -228,7 +228,160 @@ graph TB
     Internet -->|HTTP Response| User
 ```
 
-### Request Flow - Complete Journey
+---
+
+## LangChain Pipeline - Code Implementation
+
+Below are the key Python code snippets from each step of the LangChain pipeline as implemented in `ecr.tf`:
+
+### Step 1: LangChain Framework Initialization
+
+```python
+# LangChain imports with fallback compatibility
+try:
+    from langchain_aws.llms import BedrockLLM
+except Exception:
+    try:
+        from langchain_community.llms.bedrock import Bedrock as BedrockLLM
+    except Exception:
+        BedrockLLM = None
+
+# Flask app initialization
+app = Flask(__name__)
+
+# Bedrock client for direct API calls with Claude Haiku 4.5
+bedrock_client = boto3.client('bedrock-runtime', region_name=AWS_REGION)
+BEDROCK_MODEL = os.getenv('BEDROCK_MODEL_ID', 'anthropic.claude-haiku-4-5-20251001-v1:0')
+```
+
+### Step 2: Async Web Search (Concurrent SerpAPI Calls)
+
+```python
+async def serpapi_search_single(session: aiohttp.ClientSession, query: str, start: int = 0):
+    url = 'https://serpapi.com/search.json'
+    params = {'q': query, 'api_key': SERPAPI_KEY, 'start': start}
+    async with session.get(url, params=params, timeout=15) as resp:
+        resp.raise_for_status()
+        return await resp.json()
+
+async def run_concurrent_searches(query: str, pages: int = 2) -> List[str]:
+    # Run multiple searches in parallel with asyncio.gather
+    tasks = [serpapi_search_single(session, query, start=i*10) for i in range(pages)]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    snippets = []
+    for r in results:
+        if isinstance(r, Exception):
+            continue
+        for item in r.get('organic_results', [])[:5]:
+            snippets.append(item.get('snippet') or item.get('title') or '')
+    return snippets
+```
+
+### Step 3: Database Search (DynamoDB Integration)
+
+```python
+db = boto3.resource('dynamodb', region_name=AWS_REGION)
+
+def ddb_search_similar(topic: str) -> List[str]:
+    table = db.Table(DDB_TABLE)
+    try:
+        resp = table.scan()  # Scan DynamoDB table
+        items = resp.get('Items', [])
+        # Filter items by topic match (case-insensitive)
+        out = [it['content'] for it in items 
+               if 'content' in it and topic.lower() in it['content'].lower()]
+        return out
+    except Exception as e:
+        print(f'DynamoDB error: {e}')
+        return []
+```
+
+### Step 4: Bedrock Summarization with Retry Logic
+
+```python
+@retry(wait=wait_exponential(min=1, max=10), 
+       stop=stop_after_attempt(3), 
+       retry=retry_if_exception_type(Exception))
+def call_bedrock(prompt: str) -> str:
+    # Claude Haiku 4.5 request format (Anthropic API)
+    request_body = {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 512,
+        "messages": [
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": prompt}]
+            }
+        ]
+    }
+    
+    # Invoke Bedrock with inference profile ARN
+    response = bedrock_client.invoke_model(
+        modelId=BEDROCK_MODEL,  # System-defined inference profile
+        contentType='application/json',
+        accept='application/json',
+        body=json.dumps(request_body)
+    )
+    
+    # Parse response and extract summary
+    response_body = json.loads(response['body'].read())
+    if 'content' in response_body:
+        result = response_body['content'][0].get('text', 'No text in response')
+        return result
+    else:
+        return str(response_body)
+```
+
+### Step 5: Multi-Source Orchestration (Main Pipeline)
+
+```python
+@app.route('/summarize', methods=['POST'])
+def summarize():
+    # Parse request
+    payload = request.get_json(force=True) or {}
+    topic = payload.get('topic', '').strip()
+    
+    # Step 1: Search database
+    db_results = ddb_search_similar(topic)
+    
+    # Step 2: Search web (if SerpAPI configured)
+    web_results = []
+    if SERPAPI_KEY:
+        web_results = asyncio.run(run_concurrent_searches(topic, pages=2))
+    
+    # Step 3: Combine results from all sources
+    all_results = db_results + web_results
+    
+    # Step 4: Build prompt and call Bedrock
+    summary = 'No information found'
+    if all_results:
+        context = '\n'.join(all_results[:10])
+        prompt = f'Topic: {topic}\n\nContext:\n{context}\n\nProvide a concise summary (2-3 sentences).'
+        summary = call_bedrock(prompt)  # Claude Haiku 4.5 generates summary
+    
+    # Step 5: Return structured response
+    return jsonify({
+        'topic': topic,
+        'db_count': len(db_results),
+        'web_count': len(web_results),
+        'summary': str(summary)
+    })
+```
+
+### Key LangChain Features in This Implementation
+
+| Feature | Implementation | Purpose |
+|---------|----------------|---------|
+| **Async Concurrency** | `asyncio.gather()` + `aiohttp` | Parallel web searches for speed |
+| **Retry Logic** | `@retry` decorator from tenacity | Robust API calls with exponential backoff |
+| **Multi-Source RAG** | Combine DDB + Web + LLM | Comprehensive context for summarization |
+| **Error Handling** | Try/except blocks + RetryError extraction | Graceful failure handling |
+| **Bedrock Integration** | `boto3.client('bedrock-runtime')` | Direct Claude Haiku 4.5 invocation |
+| **Request/Response Parsing** | JSON formatting + proper message structure | Anthropic API compliance |
+
+---
+
+## Request Flow - Complete Journey
 
 ```mermaid
 sequenceDiagram
