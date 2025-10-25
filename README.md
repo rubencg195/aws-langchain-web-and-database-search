@@ -25,33 +25,33 @@ A production-ready **LangChain-powered serverless application** that combines we
 
 ## Project Status
 
-✅ **FULLY DEPLOYED AND OPERATIONAL WITH LANGCHAIN + CLAUDE HAIKU 4.5 SUMMARIZATION WORKING**
+**FULLY DEPLOYED AND OPERATIONAL WITH LANGCHAIN + CLAUDE HAIKU 4.5 SUMMARIZATION**
 
 ### Latest Updates (October 24, 2025)
 
 **Infrastructure**: All resources deployed successfully via OpenTofu
-- VPC with 2 public subnets ✅
-- Application Load Balancer ✅
-- ECS Fargate cluster with running Flask task ✅
-- ECR repository with Docker image built and pushed ✅
-- DynamoDB table with 5 sample items populated ✅
-- CloudWatch Logs integration ✅
-- **Bedrock Inference Profile (system-defined Claude Haiku 4.5) ✅**
+- VPC with 2 public subnets
+- Application Load Balancer
+- ECS Fargate cluster with running Flask task
+- ECR repository with Docker image built and pushed
+- DynamoDB table with 5 sample items populated
+- CloudWatch Logs integration
+- **Bedrock Inference Profile (system-defined Claude Haiku 4.5)**
 
 **API Status**:
-- Health Check (`/health`): ✅ Working - Returns `{"status":"ok"}`
-- Summarize Endpoint (`/summarize`): ✅ Working - HTTP 200 with JSON response
-- Database Search: ✅ Verified - Successfully retrieves matching items
-- **LangChain + Claude Haiku 4.5 Summarization**: ✅ **WORKING** - Generating high-quality summaries
-- Error Handling: ✅ Graceful error messages with proper status codes
+- Health Check (`/health`): Returns `{"status":"ok"}`
+- Summarize Endpoint (`/summarize`): HTTP 200 with JSON response
+- Database Search: Verified - Successfully retrieves matching items
+- **LangChain + Claude Haiku 4.5 Summarization**: Generating high-quality summaries
+- Error Handling: Graceful error messages with proper status codes
 
 **Testing Results**:
 ```bash
-# Test 1: Health Check ✅
+# Test 1: Health Check
 curl http://langchain-web-db-search-alb-1600321510.us-east-1.elb.amazonaws.com/health
 Response: {"status":"ok"}
 
-# Test 2: LangChain + Claude Haiku 4.5 Summarization with Database Context ✅  
+# Test 2: LangChain + Claude Haiku 4.5 Summarization with Database Context
 curl -X POST http://langchain-web-db-search-alb-1600321510.us-east-1.elb.amazonaws.com/summarize \
   -H "Content-Type: application/json" \
   -d '{"topic":"Canada"}'
@@ -65,15 +65,15 @@ Response:
 }
 ```
 
-**Working Components**:
-- ✅ Infrastructure fully managed by OpenTofu
-- ✅ Docker containerization and ECR integration
-- ✅ Database search functionality (DynamoDB integration)
-- ✅ **LangChain framework integration**
-- ✅ **AWS Bedrock Claude Haiku 4.5 model for summarization**
-- ✅ API endpoints responding correctly
-- ✅ CloudWatch logging with detailed debugging
-- ✅ Error handling and retry logic with tenacity
+**Components**:
+- Infrastructure fully managed by OpenTofu
+- Docker containerization and ECR integration
+- Database search functionality (DynamoDB integration)
+- **LangChain framework integration**
+- **AWS Bedrock Claude Haiku 4.5 model for summarization**
+- API endpoints responding correctly
+- CloudWatch logging with detailed debugging
+- Error handling and retry logic with tenacity
 
 ---
 
@@ -319,24 +319,24 @@ graph TD
 ## Features
 
 ### Application Features
-- ✅ **LangChain Framework Integration**: Seamless orchestration of complex NLP pipelines
-- ✅ **Claude Haiku 4.5 LLM**: Latest, fastest, most cost-effective Bedrock model for real-time summarization
-- ✅ **Async Concurrent Web Search**: Multiple SerpAPI searches run in parallel with aiohttp
-- ✅ **Tenacity Retry Logic**: Automatic retry with exponential backoff for robust API calls
-- ✅ **DynamoDB Integration**: Retrieval from knowledge base with sample renewable energy data
-- ✅ **Multi-Source RAG**: Combines database + web + LLM for comprehensive summaries
-- ✅ **RESTful API**: Simple POST endpoint for summarization with Flask
-- ✅ **Health Checks**: Monitoring endpoint for ALB with automatic task recovery
+- **LangChain Framework Integration**: Seamless orchestration of complex NLP pipelines
+- **Claude Haiku 4.5 LLM**: Latest, fastest, most cost-effective Bedrock model for real-time summarization
+- **Async Concurrent Web Search**: Multiple SerpAPI searches run in parallel with aiohttp
+- **Tenacity Retry Logic**: Automatic retry with exponential backoff for robust API calls
+- **DynamoDB Integration**: Retrieval from knowledge base with sample renewable energy data
+- **Multi-Source RAG**: Combines database + web + LLM for comprehensive summaries
+- **RESTful API**: Simple POST endpoint for summarization with Flask
+- **Health Checks**: Monitoring endpoint for ALB with automatic task recovery
 
 ### Infrastructure Features
-- ✅ **Fully Automated Deployment**: One command deployment with OpenTofu
-- ✅ **Modular Architecture**: Separated into logical components (VPC, ECR, Fargate, DynamoDB, Bedrock)
-- ✅ **Auto-scaling Ready**: ECS Fargate with configurable task counts
-- ✅ **Secure Networking**: VPC with public subnets and security groups
-- ✅ **Container Registry**: Private ECR repository with automated Docker build/push
-- ✅ **Logging**: CloudWatch Logs integration with detailed debugging output
-- ✅ **High Availability**: 2 tasks across 2 availability zones
-- ✅ **Bedrock Integration**: System-defined inference profiles for on-demand throughput
+- **Fully Automated Deployment**: One command deployment with OpenTofu
+- **Modular Architecture**: Separated into logical components (VPC, ECR, Fargate, DynamoDB, Bedrock)
+- **Auto-scaling Ready**: ECS Fargate with configurable task counts
+- **Secure Networking**: VPC with public subnets and security groups
+- **Container Registry**: Private ECR repository with automated Docker build/push
+- **Logging**: CloudWatch Logs integration with detailed debugging output
+- **High Availability**: 2 tasks across 2 availability zones
+- **Bedrock Integration**: System-defined inference profiles for on-demand throughput
 
 ---
 
@@ -476,19 +476,19 @@ Response:
 **Why Claude Haiku 4.5?**
 
 Haiku 4.5 is the latest and most optimized model for this use case:
-- ✅ **Fastest Response Time**: ~50ms latency for typical queries
-- ✅ **Most Cost-Effective**: ~$0.80 per million input tokens (70% cheaper than Sonnet)
-- ✅ **Advanced Reasoning**: Capable of complex NLP tasks despite compact size
-- ✅ **Production-Ready**: Extensively tested and optimized by Anthropic
-- ✅ **Real-Time Processing**: Perfect for sub-second API responses
-- ✅ **On-Demand Throughput**: Scales automatically without provisioning
+- Fastest Response Time: ~50ms latency for typical queries
+- Most Cost-Effective: ~$0.80 per million input tokens (70% cheaper than Sonnet)
+- Advanced Reasoning: Capable of complex NLP tasks despite compact size
+- Production-Ready: Extensively tested and optimized by Anthropic
+- Real-Time Processing: Perfect for sub-second API responses
+- On-Demand Throughput: Scales automatically without provisioning
 
 **Good news**: Bedrock model access is now automatically enabled by AWS for all accounts!
 
-✅ **System-Defined Inference Profiles**: AWS provides pre-built inference profiles for optimal cross-region support
-✅ **Claude Haiku 4.5 (Latest Model)**: `us.anthropic.claude-haiku-4-5-20251001-v1:0` 
-✅ **No Manual Enablement Needed**: All foundation models support on-demand throughput by default
-✅ **LangChain Integration**: Fully compatible with LangChain's BedrockLLM wrapper
+**System-Defined Inference Profiles**: AWS provides pre-built inference profiles for optimal cross-region support
+**Claude Haiku 4.5 (Latest Model)**: `us.anthropic.claude-haiku-4-5-20251001-v1:0` 
+**No Manual Enablement Needed**: All foundation models support on-demand throughput by default
+**LangChain Integration**: Fully compatible with LangChain's BedrockLLM wrapper
 
 **What's Configured**:
 - **Framework**: LangChain for pipeline orchestration
@@ -523,7 +523,7 @@ locals {
 ```
 
 Available inference profiles (system-defined, automatically enabled):
-- `us.anthropic.claude-haiku-4-5-20251001-v1:0` (recommended - fast, cost-effective) ✅
+- `us.anthropic.claude-haiku-4-5-20251001-v1:0` (recommended - fast, cost-effective)
 - `us.anthropic.claude-3-sonnet-20240229-v1:0` (balanced capability/speed)
 - `us.anthropic.claude-3-opus-20240229-v1:0` (most capable, slowest)
 
@@ -547,10 +547,10 @@ locals {
 ```
 
 This references AWS's system-defined inference profile which:
-- ✅ Supports on-demand throughput
-- ✅ Works across us-east-1, us-east-2, us-west-2
-- ✅ Automatically scales based on usage
-- ✅ No provisioning or configuration needed
+- Supports on-demand throughput
+- Works across us-east-1, us-east-2, us-west-2
+- Automatically scales based on usage
+- No provisioning or configuration needed
 
 ### 4. ECS Resources
 Edit `locals.tf`:
@@ -706,7 +706,7 @@ BEDROCK_MODEL_ID = "arn:aws:bedrock:us-east-1:176843580427:inference-profile/us.
 
 All of these are automatically available in your account:
 
-- `us.anthropic.claude-haiku-4-5-20251001-v1:0` (Latest, fastest, most cost-effective) ✅
+- `us.anthropic.claude-haiku-4-5-20251001-v1:0` (Latest, fastest, most cost-effective)
 - `us.anthropic.claude-3-sonnet-20240229-v1:0` (Balanced capability and speed)
 - `us.anthropic.claude-3-opus-20240229-v1:0` (Most capable, slowest)
 - `us.meta.llama3-70b-instruct-v1:0` (Open-source alternative)
@@ -1133,31 +1133,31 @@ aws logs tail /ecs/aws-langchain-web-and-database-search --follow
 
 After deployment, verify:
 
-- [ ] ✅ ALB is active and healthy
-- [ ] ✅ ECS tasks are running (2 replicas)
-- [ ] ✅ Health check endpoint responds with 200 OK
-- [ ] ✅ DynamoDB table has 5 items
-- [ ] ✅ ECR repository has latest image
-- [ ] ✅ CloudWatch Logs group created
-- [ ] ✅ Summarize endpoint returns JSON
-- [ ] ✅ Database search is working (db_count > 0 for matching topics)
-- [ ] ✅ Bedrock is generating summaries
-- [ ] ✅ Error handling returns graceful messages
+- [ ] ALB is active and healthy
+- [ ] ECS tasks are running (2 replicas)
+- [ ] Health check endpoint responds with 200 OK
+- [ ] DynamoDB table has 5 items
+- [ ] ECR repository has latest image
+- [ ] CloudWatch Logs group created
+- [ ] Summarize endpoint returns JSON
+- [ ] Database search is working (db_count > 0 for matching topics)
+- [ ] Bedrock is generating summaries
+- [ ] Error handling returns graceful messages
 
 ### Production Features
 
 This deployment is production-ready with:
 
-- ✅ **High Availability**: 2 tasks across 2 availability zones
-- ✅ **Auto-Recovery**: ECS service monitors task health
-- ✅ **Scalability**: Fargate auto-scaling ready
-- ✅ **Reliability**: Retry logic with exponential backoff
-- ✅ **Observability**: CloudWatch Logs + structured logging
-- ✅ **Security**: IAM roles with least privilege
-- ✅ **Infrastructure as Code**: Full Terraform/OpenTofu management
-- ✅ **Documentation**: Comprehensive guides and examples
-- ✅ **Error Handling**: Graceful failures with detailed messages
-- ✅ **Cost Efficiency**: On-demand pricing for all services
+- **High Availability**: 2 tasks across 2 availability zones
+- **Auto-Recovery**: ECS service monitors task health
+- **Scalability**: Fargate auto-scaling ready
+- **Reliability**: Retry logic with exponential backoff
+- **Observability**: CloudWatch Logs + structured logging
+- **Security**: IAM roles with least privilege
+- **Infrastructure as Code**: Full Terraform/OpenTofu management
+- **Documentation**: Comprehensive guides and examples
+- **Error Handling**: Graceful failures with detailed messages
+- **Cost Efficiency**: On-demand pricing for all services
 
 ### Next Steps
 
@@ -1211,14 +1211,14 @@ This will remove:
 ## Summary
 
 This comprehensive documentation covers:
-- ✅ Complete system architecture with Mermaid diagrams
-- ✅ Request flow and internal processing details
-- ✅ Bedrock integration troubleshooting and resolution
-- ✅ Infrastructure as Code organization
-- ✅ Deployment sequence and configuration
-- ✅ API usage and examples
-- ✅ Monitoring and troubleshooting guide
-- ✅ Cost analysis and production readiness
-- ✅ All best practices and next steps
+- Complete system architecture with Mermaid diagrams
+- Request flow and internal processing details
+- Bedrock integration troubleshooting and resolution
+- Infrastructure as Code organization
+- Deployment sequence and configuration
+- API usage and examples
+- Monitoring and troubleshooting guide
+- Cost analysis and production readiness
+- All best practices and next steps
 
-**ALL DOCUMENTATION IS NOW IN THIS SINGLE README.MD FILE** ✅
+**ALL DOCUMENTATION IS NOW IN THIS SINGLE README.MD FILE**
